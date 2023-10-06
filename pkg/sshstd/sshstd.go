@@ -82,11 +82,9 @@ func (s *SSHBuf) getData() {
 	for {
 		select {
 		case d := <-s.Data:
-			fmt.Println(">> Receved Data")
 			s.Buffer += string(d)
-			fmt.Println(s.Buffer)
+			fmt.Print(s.Buffer)
 		case <-t.C:
-			fmt.Println(">> Timeout")
 			// return
 		}
 	}
@@ -220,6 +218,40 @@ func ExecCase03() {
 	}()
 
 	// 사용자 입력을 TTY로 전송
+	go func() {
+		io.Copy(s.Stdin, os.Stdin)
+	}()
+
+	session.Shell()
+	session.Wait()
+
+}
+
+func ExecCase04() {
+	s := &SSHBuf{Data: make(chan []byte, 1024)}
+	config := getConfig()
+	conn := newConn(config)
+	defer func() {
+		fmt.Println("Connection Closed")
+		conn.Close()
+	}()
+
+	session := newSession(conn)
+	defer func() {
+		fmt.Println("Session Closed")
+		session.Close()
+	}()
+
+	if err := session.RequestPty("xterm", 80, 40, ssh.TerminalModes{}); err != nil {
+		log.Fatal(err.Error())
+	}
+
+	s.Stdin, _ = session.StdinPipe()
+	s.Stdout, _ = session.StdoutPipe()
+
+	go s.reader()
+	go s.getData()
+
 	go func() {
 		io.Copy(s.Stdin, os.Stdin)
 	}()
